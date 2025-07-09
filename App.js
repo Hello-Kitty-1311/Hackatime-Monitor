@@ -88,9 +88,66 @@ export default function App() {
     }
   };
 
+  const addAlarm = () => {
+    if (!newAlarmName.trim() || !newAlarmHours || !newAlarmMinutes) {
+      Alert.alert('Missing Information', 'Please provide alarm name, hours, and minutes.');
+      return;
+    }
+
+    const hours = parseInt(newAlarmHours);
+    const minutes = parseInt(newAlarmMinutes);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      Alert.alert('Invalid Time', 'Please enter valid hours (0-23) and minutes (0-59).');
+      return;
+    }
+
+    const newAlarm = {
+      id: Date.now().toString(),
+      name: newAlarmName.trim(),
+      hours: newAlarmHours,
+      minutes: newAlarmMinutes,
+      enabled: true,
+      hasTriggered: false,
+      lastTriggeredDate: null,
+      type: 'manual',
+    };
+
+    setAlarms(prevAlarms => [...prevAlarms, newAlarm]);
+    setNewAlarmName('');
+    setNewAlarmHours('');
+    setNewAlarmMinutes('');
+    setShowAddAlarmModal(false);
+  };
+
   const toggleAlarm = (id) => {
     setAlarms(prevAlarms => prevAlarms.map(alarm => 
       alarm.id === id ? { ...alarm, enabled: !alarm.enabled } : alarm
+    ));
+  };
+
+  const deleteAlarm = (id) => {
+    Alert.alert(
+      'Delete Alarm',
+      'Are you sure you want to delete this alarm?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => setAlarms(prevAlarms => prevAlarms.filter(alarm => alarm.id !== id))
+        }
+      ]
+    );
+  };
+
+  const resetAlarm = (id) => {
+    setAlarms(prevAlarms => prevAlarms.map(alarm => 
+      alarm.id === id ? { 
+        ...alarm, 
+        hasTriggered: false, 
+        lastTriggeredDate: null 
+      } : alarm
     ));
   };
 
@@ -240,40 +297,26 @@ export default function App() {
             )}
           </View>
         </View>
+        
+        <View style={styles.alarmActions}>
+          {isTriggeredToday && (
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={() => resetAlarm(alarm.id)}
+            >
+              <Text style={styles.resetButtonText}>Reset</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => deleteAlarm(alarm.id)}
+          >
+            <Text style={styles.deleteButtonText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
-  };
-
-  const addAlarm = () => {
-    if (!newAlarmName.trim() || !newAlarmHours || !newAlarmMinutes) {
-      Alert.alert('Missing Information', 'Please provide alarm name, hours, and minutes.');
-      return;
-    }
-
-    const hours = parseInt(newAlarmHours);
-    const minutes = parseInt(newAlarmMinutes);
-
-    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-      Alert.alert('Invalid Time', 'Please enter valid hours (0-23) and minutes (0-59).');
-      return;
-    }
-
-    const newAlarm = {
-      id: Date.now().toString(),
-      name: newAlarmName.trim(),
-      hours: newAlarmHours,
-      minutes: newAlarmMinutes,
-      enabled: true,
-      hasTriggered: false,
-      lastTriggeredDate: null,
-      type: 'manual',
-    };
-
-    setAlarms(prevAlarms => [...prevAlarms, newAlarm]);
-    setNewAlarmName('');
-    setNewAlarmHours('');
-    setNewAlarmMinutes('');
-    setShowAddAlarmModal(false);
   };
 
   return (
@@ -455,11 +498,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 99999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
   },
   addButtonText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+    letterSpacing: 0.009,
   },
   alarmItem: {
     backgroundColor: '#252429',
@@ -468,6 +517,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#3c4858',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 2,
   },
   alarmHeader: {
     flexDirection: 'row',
@@ -484,10 +538,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
   alarmTime: {
     fontSize: 14,
     color: '#8492a6',
+    lineHeight: 19.25,
   },
   alarmStatus: {
     flexDirection: 'row',
@@ -503,11 +559,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  alarmActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  resetButton: {
+    backgroundColor: '#f1c40f',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99999,
+  },
+  resetButtonText: {
+    color: '#1f2d3d',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    backgroundColor: '#ec3750',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99999,
+  },
+  deleteButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   noAlarmsText: {
     color: '#8492a6',
     fontSize: 14,
     textAlign: 'center',
     padding: 16,
+    lineHeight: 19.25,
   },
   statsContainer: {
     backgroundColor: '#252429',
@@ -516,6 +599,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#3c4858',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statsText: {
     fontSize: 24,
@@ -526,6 +614,7 @@ const styles = StyleSheet.create({
   statsSubtext: {
     fontSize: 14,
     color: '#8492a6',
+    lineHeight: 19.25,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -537,6 +626,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 99999,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
   },
   startButton: {
     backgroundColor: '#33d6a6',
@@ -548,6 +642,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.009,
   },
   statusContainer: {
     backgroundColor: '#252429',
@@ -556,6 +651,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#33d6a6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statusText: {
     color: '#33d6a6',
@@ -566,6 +666,7 @@ const styles = StyleSheet.create({
   statusSubtext: {
     color: '#8492a6',
     fontSize: 14,
+    lineHeight: 19.25,
   },
   modalOverlay: {
     flex: 1,
@@ -579,6 +680,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: '90%',
     maxWidth: 400,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.125,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalTitle: {
     fontSize: 20,
@@ -586,6 +693,7 @@ const styles = StyleSheet.create({
     color: '#f9fafc',
     textAlign: 'center',
     marginBottom: 8,
+    lineHeight: 22.5,
   },
   timeInputContainer: {
     flexDirection: 'row',
@@ -621,11 +729,17 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 99999,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
   },
   cancelButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.009,
   },
   saveButton: {
     flex: 1,
@@ -633,10 +747,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 99999,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.009,
   },
 });
