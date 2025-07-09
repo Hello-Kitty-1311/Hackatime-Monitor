@@ -1,29 +1,38 @@
 {
   "expo": {
-    "name": "hackatime-monitor",
+    "name": "Hackatime Monitor",
     "slug": "hackatime-monitor",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "https://assets.hackclub.com/icon-progress-rounded.svg",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.kirubavathi.hackatimemonitor"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "https://assets.hackclub.com/flag-orpheus-left.svg"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "MyProjectId12345"
+      }
+    },
+    "owner": "kirubavathi"
   }
 }
