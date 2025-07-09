@@ -12,12 +12,98 @@ import {
   Modal,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const BACKGROUND_FETCH_TASK = 'background-fetch-coding-stats';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const getTodayDateString = () => {
   const today = new Date();
   return today.toISOString().split('T')[0];
 };
+
+TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
+  try {
+    const apiKey = await AsyncStorage.getItem('apiKey');
+    const alarmsData = await AsyncStorage.getItem('alarms');
+    
+    if (!apiKey || !alarmsData) {
+      return BackgroundFetch.BackgroundFetchResult.Failed;
+    }
+
+    const alarms = JSON.parse(alarmsData);
+    const today = getTodayDateString();
+
+    const response = await fetch('https://hackatime.hackclub.com/api/hackatime/v1/users/current/statusbar/today', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      return BackgroundFetch.BackgroundFetchResult.Failed;
+    }
+
+    const data = await response.json();
+    const totalSeconds = data.data.grand_total.total_seconds;
+    const currentHours = Math.floor(totalSeconds / 3600);
+    const currentMinutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    let hasTriggeredAlarm = false;
+    
+    for (let i = 0; i < alarms.length; i++) {
+      const alarm = alarms[i];
+      
+      if (!alarm.enabled) continue;
+      
+      if (alarm.lastTriggeredDate !== today) {
+        alarm.hasTriggered = false;
+        alarm.lastTriggeredDate = null;
+      }
+      
+      if (alarm.hasTriggered && alarm.lastTriggeredDate === today) continue;
+      
+      const targetHours = parseInt(alarm.hours);
+      const targetMinutes = parseInt(alarm.minutes);
+      
+      if (currentHours > targetHours || 
+          (currentHours === targetHours && currentMinutes >= targetMinutes)) {
+        
+        alarm.hasTriggered = true;
+        alarm.lastTriggeredDate = today;
+        hasTriggeredAlarm = true;
+        
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `Time to Commit and post Devlogs! (${alarm.name})`,
+            body: `You've been coding for ${currentHours}h ${currentMinutes}m. Target: ${targetHours}h ${targetMinutes}m`,
+            sound: true,
+          },
+          trigger: null,
+        });
+      }
+    }
+    
+    if (hasTriggeredAlarm) {
+      await AsyncStorage.setItem('alarms', JSON.stringify(alarms));
+    }
+
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  } catch (error) {
+    console.error('Background fetch error:', error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
 
 export default function App() {
   const [apiKey, setApiKey] = useState('');
@@ -37,6 +123,7 @@ export default function App() {
   const intervalRef = useRef(null);
 
   useEffect(() => {
+    setupNotifications();
     loadStoredData();
     
     return () => {
@@ -52,6 +139,13 @@ export default function App() {
   useEffect(() => {
     saveData();
   }, [alarms, apiKey]);
+
+  const setupNotifications = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please enable notifications for alarms to work properly.');
+    }
+  };
 
   const loadStoredData = async () => {
     try {
@@ -110,7 +204,6 @@ export default function App() {
       enabled: true,
       hasTriggered: false,
       lastTriggeredDate: null,
-      type: 'manual',
     };
 
     setAlarms(prevAlarms => [...prevAlarms, newAlarm]);
@@ -239,27 +332,54 @@ export default function App() {
           }
         ]
       );
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Time to Commit and post Devlogs! (${alarm.name})`,
+          body: `You've been coding for ${currentHours}h ${currentMinutes}m. Target: ${alarm.hours}h ${alarm.minutes}m`,
+          sound: true,
+        },
+        trigger: null,
+      });
     } catch (error) {
       console.error('Error triggering alarm:', error);
     }
   };
 
-  const startMonitoring = () => {
+  const startMonitoring = async () => {
     if (!apiKey || alarms.length === 0) {
       Alert.alert('Missing Information', 'Please provide API key and at least one alarm.');
       return;
     }
 
     setIsMonitoring(true);
+
     intervalRef.current = setInterval(fetchCodingStats, 30000);
+
+    try {
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+        minimumInterval: 30,
+        stopOnTerminate: false,
+        startOnBoot: true,
+      });
+    } catch (error) {
+      console.error('Error registering background task:', error);
+    }
+
     fetchCodingStats();
   };
 
-  const stopMonitoring = () => {
+  const stopMonitoring = async () => {
     setIsMonitoring(false);
     
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+    }
+
+    try {
+      await BackgroundFetch.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
+    } catch (error) {
+      console.error('Error unregistering background task:', error);
     }
 
     if (sound) {
@@ -345,7 +465,7 @@ export default function App() {
               style={styles.addButton}
               onPress={() => setShowAddAlarmModal(true)}
             >
-              <Text style={styles.addButtonText}>+ Add</Text>
+              <Text style={styles.addButtonText}>+ Add Alarm</Text>
             </TouchableOpacity>
           </View>
           
