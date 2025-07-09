@@ -9,6 +9,7 @@ import {
   StatusBar,
   ScrollView,
   Switch,
+  Modal,
 } from 'react-native';
 
 export default function App() {
@@ -20,6 +21,10 @@ export default function App() {
     minutes: 0,
     text: '',
   });
+  const [showAddAlarmModal, setShowAddAlarmModal] = useState(false);
+  const [newAlarmName, setNewAlarmName] = useState('');
+  const [newAlarmHours, setNewAlarmHours] = useState('');
+  const [newAlarmMinutes, setNewAlarmMinutes] = useState('');
 
   const toggleAlarm = (id) => {
     setAlarms(prevAlarms => prevAlarms.map(alarm => 
@@ -54,11 +59,24 @@ export default function App() {
   };
 
   const addAlarm = () => {
+    if (!newAlarmName.trim() || !newAlarmHours || !newAlarmMinutes) {
+      Alert.alert('Missing Information', 'Please provide alarm name, hours, and minutes.');
+      return;
+    }
+
+    const hours = parseInt(newAlarmHours);
+    const minutes = parseInt(newAlarmMinutes);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      Alert.alert('Invalid Time', 'Please enter valid hours (0-23) and minutes (0-59).');
+      return;
+    }
+
     const newAlarm = {
       id: Date.now().toString(),
-      name: 'Daily Goal',
-      hours: '8',
-      minutes: '0',
+      name: newAlarmName.trim(),
+      hours: newAlarmHours,
+      minutes: newAlarmMinutes,
       enabled: true,
       hasTriggered: false,
       lastTriggeredDate: null,
@@ -66,6 +84,10 @@ export default function App() {
     };
 
     setAlarms(prevAlarms => [...prevAlarms, newAlarm]);
+    setNewAlarmName('');
+    setNewAlarmHours('');
+    setNewAlarmMinutes('');
+    setShowAddAlarmModal(false);
   };
 
   useEffect(() => {
@@ -127,7 +149,7 @@ export default function App() {
             <Text style={styles.sectionTitle}>Alarms ({alarms.length})</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={addAlarm}
+              onPress={() => setShowAddAlarmModal(true)}
             >
               <Text style={styles.addButtonText}>+ Add</Text>
             </TouchableOpacity>
@@ -159,6 +181,65 @@ export default function App() {
           <Text style={styles.buttonText}>Fetch Stats</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={showAddAlarmModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddAlarmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add New Alarm</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Alarm name (e.g., Daily Goal)"
+              placeholderTextColor="#666"
+              value={newAlarmName}
+              onChangeText={setNewAlarmName}
+            />
+            
+            <View style={styles.timeInputContainer}>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="Hours"
+                placeholderTextColor="#666"
+                value={newAlarmHours}
+                onChangeText={setNewAlarmHours}
+                keyboardType="numeric"
+                maxLength={2}
+              />
+              <Text style={styles.timeLabel}>:</Text>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="Minutes"
+                placeholderTextColor="#666"
+                value={newAlarmMinutes}
+                onChangeText={setNewAlarmMinutes}
+                keyboardType="numeric"
+                maxLength={2}
+              />
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAddAlarmModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={addAlarm}
+              >
+                <Text style={styles.saveButtonText}>Add Alarm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -315,4 +396,94 @@ const styles = StyleSheet.create({
     padding: 16,
     lineHeight: 19.25,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 18, 23, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#252429',
+    padding: 16,
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.125,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f9fafc',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 22.5,
+  },
+  timeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  timeInput: {
+    backgroundColor: '#17171d',
+    color: '#f9fafc',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#3c4858',
+    width: 80,
+    textAlign: 'center',
+  },
+  timeLabel: {
+    color: '#f9fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    marginHorizontal: 8,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#8492a6',
+    padding: 16,
+    borderRadius: 99999,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cancelButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.009,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#33d6a6',
+    padding: 16,
+    borderRadius: 99999,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.009,
+  }
 });
