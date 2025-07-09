@@ -10,6 +10,7 @@ import {
   ScrollView,
   Switch,
   Modal,
+  FlatList,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as BackgroundFetch from 'expo-background-fetch';
@@ -117,9 +118,14 @@ export default function App() {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [sound, setSound] = useState(null);
   const [showAddAlarmModal, setShowAddAlarmModal] = useState(false);
+  const [showIntervalModal, setShowIntervalModal] = useState(false);
+  const [showTestModal, setShowTestModal] = useState(false);
   const [newAlarmName, setNewAlarmName] = useState('');
   const [newAlarmHours, setNewAlarmHours] = useState('');
   const [newAlarmMinutes, setNewAlarmMinutes] = useState('');
+  const [intervalHours, setIntervalHours] = useState('');
+  const [intervalMinutes, setIntervalMinutes] = useState('');
+  const [commitCount, setCommitCount] = useState('');
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -204,6 +210,7 @@ export default function App() {
       enabled: true,
       hasTriggered: false,
       lastTriggeredDate: null,
+      type: 'manual',
     };
 
     setAlarms(prevAlarms => [...prevAlarms, newAlarm]);
@@ -211,6 +218,78 @@ export default function App() {
     setNewAlarmHours('');
     setNewAlarmMinutes('');
     setShowAddAlarmModal(false);
+  };
+
+  const createIntervalAlarms = () => {
+    if (!intervalHours || !intervalMinutes || !commitCount) {
+      Alert.alert('Missing Information', 'Please provide interval time and commit count.');
+      return;
+    }
+
+    const intervalH = parseInt(intervalHours);
+    const intervalM = parseInt(intervalMinutes);
+    const commits = parseInt(commitCount);
+
+    if (intervalH < 0 || intervalH > 23 || intervalM < 0 || intervalM > 59) {
+      Alert.alert('Invalid Time', 'Please enter valid interval hours (0-23) and minutes (0-59).');
+      return;
+    }
+
+    if (commits < 1 || commits > 50) {
+      Alert.alert('Invalid Commit Count', 'Please enter a commit count between 1 and 50.');
+      return;
+    }
+
+    const nonIntervalAlarms = alarms.filter(alarm => alarm.type !== 'interval');
+
+    const newIntervalAlarms = [];
+    for (let i = 1; i <= commits; i++) {
+      const totalMinutes = (intervalH * 60 + intervalM) * i;
+      const alarmHours = Math.floor(totalMinutes / 60);
+      const alarmMinutes = totalMinutes % 60;
+
+      if (alarmHours > 23) {
+        Alert.alert('Time Limit Exceeded', `Commit ${i} would exceed 24 hours. Please reduce interval time or commit count.`);
+        return;
+      }
+
+      newIntervalAlarms.push({
+        id: `interval_${i}_${Date.now()}`,
+        name: `Commit ${i}`,
+        hours: alarmHours.toString(),
+        minutes: alarmMinutes.toString(),
+        enabled: true,
+        hasTriggered: false,
+        lastTriggeredDate: null,
+        type: 'interval',
+      });
+    }
+
+    setAlarms([...nonIntervalAlarms, ...newIntervalAlarms]);
+    setIntervalHours('');
+    setIntervalMinutes('');
+    setCommitCount('');
+    setShowIntervalModal(false);
+
+    Alert.alert('Success', `Created ${commits} interval alarms successfully!`);
+  };
+
+  const clearIntervalAlarms = () => {
+    Alert.alert(
+      'Clear Interval Alarms',
+      'Are you sure you want to clear all interval alarms?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: () => {
+            const nonIntervalAlarms = alarms.filter(alarm => alarm.type !== 'interval');
+            setAlarms(nonIntervalAlarms);
+          }
+        }
+      ]
+    );
   };
 
   const toggleAlarm = (id) => {
@@ -388,14 +467,29 @@ export default function App() {
     }
   };
 
+  const getEnabledAlarms = () => alarms.filter(alarm => alarm.enabled);
+
+  const testSpecificAlarm = (alarm) => {
+    setShowTestModal(false);
+    triggerAlarm(alarm, currentStats.hours, currentStats.minutes);
+  };
+
   const renderAlarmItem = (alarm) => {
     const today = getTodayDateString();
     const isTriggeredToday = alarm.hasTriggered && alarm.lastTriggeredDate === today;
     
     return (
-      <View key={alarm.id} style={styles.alarmItem}>
+      <View key={alarm.id} style={[
+        styles.alarmItem,
+        alarm.type === 'interval' && styles.intervalAlarmItem
+      ]}>
         <View style={styles.alarmHeader}>
-          <Text style={styles.alarmName}>{alarm.name}</Text>
+          <View style={styles.alarmTitleContainer}>
+            <Text style={styles.alarmName}>{alarm.name}</Text>
+            {alarm.type === 'interval' && (
+              <Text style={styles.intervalBadge}>Interval</Text>
+            )}
+          </View>
           <Switch
             value={alarm.enabled}
             onValueChange={() => toggleAlarm(alarm.id)}
@@ -439,6 +533,16 @@ export default function App() {
     );
   };
 
+  const renderTestAlarmItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.testAlarmItem}
+      onPress={() => testSpecificAlarm(item)}
+    >
+      <Text style={styles.testAlarmName}>{item.name}</Text>
+      <Text style={styles.testAlarmTime}>{item.hours}h {item.minutes}m</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
@@ -461,13 +565,30 @@ export default function App() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Alarms ({alarms.length})</Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAddAlarmModal(true)}
-            >
-              <Text style={styles.addButtonText}>+ Add Alarm</Text>
-            </TouchableOpacity>
+            <View style={styles.alarmButtons}>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setShowAddAlarmModal(true)}
+              >
+                <Text style={styles.addButtonText}>+ Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.intervalButton}
+                onPress={() => setShowIntervalModal(true)}
+              >
+                <Text style={styles.intervalButtonText}>⏱ Interval</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+          
+          {alarms.filter(alarm => alarm.type === 'interval').length > 0 && (
+            <TouchableOpacity
+              style={styles.clearIntervalButton}
+              onPress={clearIntervalAlarms}
+            >
+              <Text style={styles.clearIntervalButtonText}>Clear All Interval Alarms</Text>
+            </TouchableOpacity>
+          )}
           
           {alarms.length === 0 ? (
             <Text style={styles.noAlarmsText}>No alarms configured</Text>
@@ -496,6 +617,20 @@ export default function App() {
             <Text style={styles.buttonText}>
               {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={() => {
+              const enabledAlarms = getEnabledAlarms();
+              if (enabledAlarms.length === 0) {
+                Alert.alert('No Active Alarms', 'Please enable at least one alarm to test.');
+                return;
+              }
+              setShowTestModal(true);
+            }}
+          >
+            <Text style={styles.buttonText}>Test Alarm</Text>
           </TouchableOpacity>
         </View>
 
@@ -567,6 +702,119 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showIntervalModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowIntervalModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Interval Clock</Text>
+            <Text style={styles.modalSubtitle}>
+              Create multiple alarms based on intervals
+            </Text>
+            
+            <Text style={styles.inputLabel}>Interval Time</Text>
+            <View style={styles.timeInputContainer}>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="Hours"
+                placeholderTextColor="#666"
+                value={intervalHours}
+                onChangeText={setIntervalHours}
+                keyboardType="numeric"
+                maxLength={2}
+              />
+              <Text style={styles.timeLabel}>:</Text>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="Minutes"
+                placeholderTextColor="#666"
+                value={intervalMinutes}
+                onChangeText={setIntervalMinutes}
+                keyboardType="numeric"
+                maxLength={2}
+              />
+            </View>
+            
+            <Text style={styles.inputLabel}>Number of Commits</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 10"
+              placeholderTextColor="#666"
+              value={commitCount}
+              onChangeText={setCommitCount}
+              keyboardType="numeric"
+              maxLength={2}
+            />
+            
+            {intervalHours && intervalMinutes && commitCount && (
+              <View style={styles.previewContainer}>
+                <Text style={styles.previewTitle}>Preview:</Text>
+                <Text style={styles.previewText}>
+                  Commit 1: {intervalHours}h {intervalMinutes}m
+                </Text>
+                <Text style={styles.previewText}>
+                  Commit 2: {Math.floor(((parseInt(intervalHours) * 60 + parseInt(intervalMinutes)) * 2) / 60)}h {((parseInt(intervalHours) * 60 + parseInt(intervalMinutes)) * 2) % 60}m
+                </Text>
+                <Text style={styles.previewText}>...</Text>
+                <Text style={styles.previewText}>
+                  Commit {commitCount}: {Math.floor(((parseInt(intervalHours) * 60 + parseInt(intervalMinutes)) * parseInt(commitCount)) / 60)}h {((parseInt(intervalHours) * 60 + parseInt(intervalMinutes)) * parseInt(commitCount)) % 60}m
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowIntervalModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={createIntervalAlarms}
+              >
+                <Text style={styles.saveButtonText}>Create Alarms</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTestModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Test Alarm</Text>
+            <Text style={styles.modalSubtitle}>
+              Choose which alarm to test
+            </Text>
+            
+            <FlatList
+              data={getEnabledAlarms()}
+              renderItem={renderTestAlarmItem}
+              keyExtractor={(item) => item.id}
+              style={styles.testAlarmList}
+              showsVerticalScrollIndicator={false}
+            />
+            
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowTestModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -613,6 +861,10 @@ const styles = StyleSheet.create({
     borderColor: '#3c4858',
     marginBottom: 8,
   },
+  alarmButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   addButton: {
     backgroundColor: '#33d6a6',
     paddingHorizontal: 16,
@@ -625,6 +877,41 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   addButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.009,
+  },
+  intervalButton: {
+    backgroundColor: '#338eda',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 99999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  intervalButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.009,
+  },
+  clearIntervalButton: {
+    backgroundColor: '#ec3750',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 99999,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  clearIntervalButtonText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
@@ -643,16 +930,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  intervalAlarmItem: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#338eda',
+  },
   alarmHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  alarmTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   alarmName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#f9fafc',
+    marginRight: 8,
+  },
+  intervalBadge: {
+    backgroundColor: '#338eda',
+    color: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 99999,
+    fontSize: 12,
+    fontWeight: '700',
+    overflow: 'hidden',
   },
   alarmDetails: {
     flexDirection: 'row',
@@ -758,6 +1065,19 @@ const styles = StyleSheet.create({
   stopButton: {
     backgroundColor: '#ec3750',
   },
+  testButton: {
+    backgroundColor: '#a633d6',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 99999,
+    alignItems: 'center',
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.125,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
@@ -788,6 +1108,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19.25,
   },
+ 
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(18, 18, 23, 0.8)',
@@ -815,6 +1136,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     lineHeight: 22.5,
   },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#8492a6',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 19.25,
+  },
+  inputLabel: {
+    fontSize: 16,
+    color: '#f9fafc',
+    marginBottom: 4,
+    fontWeight: '700',
+  },
   timeInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -837,6 +1171,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginHorizontal: 8,
+  },
+  previewContainer: {
+    backgroundColor: '#17171d',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#3c4858',
+  },
+  previewTitle: {
+    fontSize: 14,
+    color: '#33d6a6',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  previewText: {
+    fontSize: 12,
+    color: '#8492a6',
+    marginBottom: 2,
+    lineHeight: 16.5,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -878,5 +1232,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.009,
+  },
+ 
+  testAlarmList: {
+    maxHeight: 300,
+    marginBottom: 16,
+  },
+  testAlarmItem: {
+    backgroundColor: '#17171d',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#3c4858',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  testAlarmName: {
+    fontSize: 16,
+    color: '#f9fafc',
+    fontWeight: '700',
+    flex: 1,
+  },
+  testAlarmTime: {
+    fontSize: 14,
+    color: '#33d6a6',
+    fontWeight: '700',
   },
 });
