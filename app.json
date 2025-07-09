@@ -7,7 +7,7 @@
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -19,20 +19,20 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "https://assets.hackclub.com/icon-progress-rounded.svg",
+        "foregroundImage": "./assets/icon2.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.kirubavathi.hackatimemonitor"
     },
     "web": {
-      "favicon": "https://assets.hackclub.com/flag-orpheus-left.svg"
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "MyProjectId12345"
+        "projectId": "277dc068-8447-4ae7-9d27-8222d3a21c82"
       }
     },
-    "owner": "kirubavathi"
+    "owner": "hello-kitty-1311"
   }
 }
